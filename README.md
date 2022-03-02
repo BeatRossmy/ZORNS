@@ -23,7 +23,7 @@ Modules are generted by holding an empty cell, immediatly the selection menu pop
 - crow_out
 - crow_in
 
-### GENERATORS
+### CTRL
 - lfo \[freq\]\[amp\]\[out\]
 - s&h \[signal\]\[gate\]\[out\]
 - vca \[signal\]\[amp\]\[out\]
