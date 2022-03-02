@@ -3,10 +3,11 @@ zorns_module = function (_x,_y,_n)
     name = _n,
     x = _x,
     y = _y,
-    ui_width = 0,
     
     inputs = {names={},indices={}},
+    values = {},
     outputs = {names={},indices={}},
+    main_param = 0,
     
     ctrl_rate = function (self) end,
     
@@ -22,31 +23,30 @@ zorns_module = function (_x,_y,_n)
       self.outputs.names[#self.outputs] = n
     end,
     
+    contains_connection = function (self, con)
+      local inlet = self:inlet(con.target.port)
+      if (inlet.source and inlet.source.source.module == con.source.module and inlet.source.source.port == con.source.port) then
+        return inlet.source
+      else
+        return nil
+      end
+    end,
+    
     add_connection = function (self, c, con)
       local inlet = self.inputs[c]
       inlet.source = con
     end,
     
     read = function (self, n)
-      return IN.get(self:get_in(n))
+      return IN.read(self:inlet(n))
     end,
     
     write = function (self, n, v)
       OUT.set(self:get_out(n),v)
     end,
     
-    --[[read_in = function (self, i)
-      i = type(i)=="string" and self.inputs.indices[i] or i
-      return self.inputs[i].value
-    end,
-    
-    write_out = function (self, i, v)
-      i = type(i)=="string" and self.outputs.indices[i] or i
-      self.outputs[i].value = v
-    end,--]]
-    
     in_area = function (self,x,y)
-      local w = #self.inputs + self.ui_width + #self.outputs
+      local w = #self.inputs + #self.values + #self.outputs
       return (y==self.y and x>=self.x and x<self.x+w)
     end,
     
@@ -60,24 +60,32 @@ zorns_module = function (_x,_y,_n)
     get_port_name = function (self, c)
       if c<=#self.inputs then
         return self.inputs.names[c]
-      elseif c<=#self.inputs+self.ui_width then
+      elseif c<=#self.inputs+#self.values then
         return "value"
       else
-        return self.outputs.names[c-(#self.inputs+self.ui_width)]
+        return self.outputs.names[c-(#self.inputs+#self.values)]
       end
     end,
     
     get_type = function (self,c)
       if c<=#self.inputs then
         return "input"
-      elseif c<=#self.inputs+self.ui_width then
+      elseif c<=#self.inputs+#self.values then
         return "value"
       else
         return "output"
       end
     end,
     
-    get_in = function (self, n)
+    --[[get_in = function (self, n)
+      if type(n)=="string" then
+        return self.inputs[self.inputs.indices[n] ]
+      elseif type(n)=="number" then
+        return self.inputs[n]
+      end
+    end,--]]
+    
+    inlet = function (self, n)
       if type(n)=="string" then
         return self.inputs[self.inputs.indices[n]]
       elseif type(n)=="number" then
@@ -93,15 +101,36 @@ zorns_module = function (_x,_y,_n)
       end
     end,
     
+    outlet = function (self, n)
+      if type(n)=="string" then
+        return self.outputs[self.outputs.indices[n]]
+      elseif type(n)=="number" then
+        return self.outputs[n]
+      end
+    end,
+    
     get_port = function (self, p)
       local port = nil
       if p<=#self.inputs then
         port = self.inputs[p]
-      elseif p>#self.inputs+self.ui_width then
-        p = p-self.ui_width-#self.inputs
+      elseif self.values and p<=#self.inputs+#self.values then
+        port = self.values[p-#self.inputs]
+      elseif p>#self.inputs+#self.values then
+        p = p-#self.values-#self.inputs
         port = self.outputs[p]
       end
       return port
+    end,
+    
+    enc = function (self, d)
+      self.main_param = util.clamp(self.main_param+d*0.01,0,1)
+      self:param_change()
+    end,
+    
+    param_change = function (self) end,
+    
+    show_param = function (self)
+      return self.main_param
     end,
     
     grid_event = function (self,x,y,z)
@@ -109,7 +138,7 @@ zorns_module = function (_x,_y,_n)
         x = x-self.x+1
         y = y-self.y+1
         
-        if x>#self.inputs and x<=#self.inputs+self.ui_width then
+        if x>#self.inputs and x<=#self.inputs+#self.values then
           x = x-#self.inputs
           self:grid_ui(x,y,z)
         end
@@ -124,7 +153,8 @@ zorns_module = function (_x,_y,_n)
     show = function (self, g)
       -- show inputs
       for i=1, #self.inputs do
-        local l = Signal.map(IN.get(self:get_in(i)),3,15,1)
+        --local l = Signal.map(self:inlet(i):get(),3,15,1)
+        local l = Signal.map(self:read(i).signal,3,15,1)
         g:led(self.x+i-1,self.y,l)
       end
       
@@ -134,7 +164,7 @@ zorns_module = function (_x,_y,_n)
       -- show outputs
       for i=1, #self.outputs do
         local l = Signal.map(OUT.get(self:get_out(i)),3,15,1)
-        g:led(self.x+self.ui_width+#self.inputs+i-1,self.y,l)
+        g:led(self.x+#self.values+#self.inputs+i-1,self.y,l)
       end
     end
   }
