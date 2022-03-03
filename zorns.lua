@@ -1,5 +1,11 @@
+engine.name = 'PolyPerc'
+
+er = require "lib.er"
+
 local UI = require "ui"
 musicutil = require "musicutil"
+
+include("lib/helpers")
 
 include("lib/connections")
 
@@ -10,8 +16,6 @@ include("lib/module_catalogue")
 scale_names = {
   "Major",
   "Natural Minor",
-  "Phrygian",
-  "Major Pentatonic",
   "Minor Pentatonic"
 }
 scales = {}
@@ -19,6 +23,10 @@ for i,n in pairs(scale_names) do scales[i] = musicutil.generate_scale (0, n, 10)
 
 local category_list = UI.ScrollingList.new (8, 8, 2, category_names)
 local module_list = UI.ScrollingList.new (40, 8, 2, module_names[category_list.index])
+
+local value_dial = UI.Dial.new(32-11, 32-11, 22, 0.25, 0, 1, 0.01, 0, {},'')
+
+local module_param = 1
 
 select_module = function (x,y)
   for _,m in pairs(MODULES) do
@@ -49,6 +57,7 @@ g.key = function(x,y,z)
   -- FIRST SELECTION
   if not selection and z==1 then
     selection = select_module(x,y)
+    module_param = 1
     if selection then
       selection.module:grid_event(x,y,z)
     end
@@ -64,7 +73,7 @@ g.key = function(x,y,z)
     end
     selection = nil
   -- SECOND SELECTION
-  elseif selection and z==1 then
+  elseif selection.module and z==1 then
     local sec_sel = select_module(x,y)
     if sec_sel then
       print("create connection")
@@ -96,13 +105,16 @@ end
 m_out = midi.connect(2)
 
 selection = nil
---option = 0
---catalogue_entry = {category=1, module=0}
 MODULES = {}
 CTRL_RATE = 1/128 -- 1/128
 
 ctrl_loop = function ()
-  for _,m in pairs(MODULES) do m:ctrl_rate() end
+  for _,m in pairs(MODULES) do
+    -- split
+    m:ctrl_rate()
+    -- 1. calculate output states
+    -- 2. propagate values to inputs
+  end
 end
 
 draw_loop = function ()
@@ -111,76 +123,49 @@ draw_loop = function ()
   g:refresh()
 end
 
--- screen_loop = function () end
-
 function redraw()
   screen.clear()
-  
-  --[[if selection and selection.type~="empty_cell" then
+  screen.level(15)
+    
+  if SEL.is_module(selection) then
     local port = SEL.get_port(selection)
     local port_name = SEL.get_name(selection)
-    local path = selection.module.name.."->"..selection.type.."->"..port_name
-    
-    screen.move(16,16)
-    screen.text(path)
-    
-    if selection.type=="value" or selection.type=="input" then
-      local y = 48
-      local r = 4
-      
-      -- MAIN PARAM
-      local t = ""..selection.module:show_param()
-      screen.move(16,32)
-      screen.text(t)
-      
-      -- SIGNAL
-      if port.bias~=nil then
-        screen.move(16,y)
-        screen.line(112,y)
-        screen.stroke()
-        local x = util.linlin(0,1,16,112,port.bias)
-        screen.move(x,y-r)
-        screen.line(x,y+r)
-        screen.stroke()
-      end
-      -- GATE
-      --[[if port.gate~=nil then
-        y = y+12
-        screen.circle(64,y,1.5*r)
-        if port.gate==1 then screen.fill() end
-        screen.stroke()
-      end--]]
-    
-    --end --]]
-    
-  if selection and (selection.type=="value" or selection.type=="input") then
-    local port = SEL.get_port(selection)
-    local port_name = SEL.get_name(selection)
-    local path = selection.module.name.."->"..selection.type.."->"..port_name
-    
-    local y = 48
-    local r = 4
+    local path = selection.module.name .. ": ".. port_name .. (selection.type=="output" and " >" or "")
     
     -- MAIN PARAM
-    local t = ""..selection.module:show_param()
-    screen.move(16,32)
-    screen.text(t)
+    --local t = ""..selection.module:show_param()
+    --screen.move(16,32)
+    --screen.text(t)
+    
+    -- PARAMS
+    local params = selection.module.params
+    for i,p in ipairs(params) do
+      screen.level(module_param==i and 15 or 3)
+      screen.move(72,16*i)
+      screen.text(p.name..":")
+      screen.move(72+32,16*i)
+      screen.text(p.options[p.value])
+    end
+    
+    screen.level(15)
     
     -- SIGNAL
-    if port.bias~=nil then
-      screen.move(16,y)
-      screen.line(112,y)
+    if port.value~=nil then
+      screen.move(32,8)
+      screen.text_center(path)
+      value_dial.x = 32-11
+      value_dial:set_value(port.value)
       screen.stroke()
-      local x = util.linlin(0,1,16,112,port.bias)
-      screen.move(x,y-r)
-      screen.line(x,y+r)
-      screen.stroke()
+      value_dial:redraw()
     end
     
   elseif SEL.is_connection(selection) then
-    
-    screen.move(32,32)
-    screen.text("strength: " .. string.format("%.2f",selection.module.strength))
+    screen.move(64,8)
+    screen.text_center("connection")
+    value_dial.x = 64-11
+    value_dial:set_value(selection.module.strength)
+    screen.stroke()
+    value_dial:redraw()
     
   elseif SEL.is_empty(selection) then
     category_list:redraw ()
@@ -190,6 +175,7 @@ function redraw()
     screen.move(32,32)
     screen.text("hold empty cell")
   end
+  
   screen.update()
 end
 
@@ -225,7 +211,6 @@ function key (n,z)
       -- DELETE MODULE
       for i,m in pairs(MODULES) do
         if m==selection.module then
-          print("delete", m)
           MODULES[i] = nil
           selection = nil
         end
@@ -236,17 +221,15 @@ end
 
 function enc (n,d)
   
-  if SEL.is_module(selection) and n==1 then
-    selection.module:enc(d)
-    
-  --elseif SEL.is_input(selection) then
-  --  local port = SEL.get_port(selection)
-  --  port.bias = util.clamp(port.bias+d*0.01,0,1)
-    
-  elseif SEL.is_input(selection) or SEL.is_value(selection) then
-    local port = SEL.get_port(selection)
-    --VALUE.add(port, d) -- <- works because both have bias
-    PORT.change_bias(port,d)
+  if SEL.is_module(selection) then
+    if n==1 then
+      local port = SEL.get_port(selection)
+      PORT.change_value(port,d)  
+    elseif n==2 then
+      module_param = util.clamp(module_param+d,1,#selection.module.params)
+    else
+      selection.module:change_param(module_param,d)
+    end
     
   elseif SEL.is_connection(selection) then
     CON.change_strength(selection.module,d)
@@ -258,5 +241,6 @@ function enc (n,d)
     elseif n==3 then
       module_list:set_index_delta(d,false)
     end
+    
   end
 end
