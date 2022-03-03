@@ -9,6 +9,8 @@ zorns_module = function (_x,_y,_n)
     outputs = {names={},indices={}},
     main_param = 0,
     
+    params = {indices={}},
+    
     ctrl_rate = function (self) end,
     
     add_input = function (self, n, s)
@@ -21,6 +23,17 @@ zorns_module = function (_x,_y,_n)
       table.insert(self.outputs,s)
       self.outputs.indices[n] = #self.outputs
       self.outputs.names[#self.outputs] = n
+    end,
+    
+    add_param = function (self, p)
+      table.insert(self.params,p)
+      self.params.indices[p.name] = #self.params
+    end,
+    
+    param = function (self, n)
+      local i = type(n)=="number" and n or self.params.indices[n]
+      local param = self.params[i]
+      return param.value
     end,
     
     contains_connection = function (self, con)
@@ -42,7 +55,7 @@ zorns_module = function (_x,_y,_n)
     end,
     
     write = function (self, n, v)
-      OUT.set(self:get_out(n),v)
+      PORT.set_value(self:get_out(n),v)
     end,
     
     in_area = function (self,x,y)
@@ -122,15 +135,15 @@ zorns_module = function (_x,_y,_n)
       return port
     end,
     
-    enc = function (self, d)
-      self.main_param = util.clamp(self.main_param+d*0.01,0,1)
-      self:param_change()
-    end,
-    
-    param_change = function (self) end,
-    
-    show_param = function (self)
-      return self.main_param
+    change_param = function (self, p, d)
+      if #self.params>0 then
+        local param = self.params[p]
+        if param.options then
+          param.value = util.clamp(param.value+d,1,#param.options)
+        elseif param.min and param.max and param.delta then
+          param.value = util.clamp(param.value+d*param.delta,param.min,param.max)
+        end
+      end
     end,
     
     grid_event = function (self,x,y,z)
@@ -163,7 +176,7 @@ zorns_module = function (_x,_y,_n)
       
       -- show outputs
       for i=1, #self.outputs do
-        local l = Signal.map(OUT.get(self:get_out(i)),3,15,1)
+        local l = Signal.map(PORT.get_value(self:get_out(i)),3,15,1)
         g:led(self.x+#self.values+#self.inputs+i-1,self.y,l)
       end
     end
