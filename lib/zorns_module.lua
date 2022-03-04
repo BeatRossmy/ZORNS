@@ -1,5 +1,45 @@
-zorns_module = function (_x,_y,_n)
+restore_module = function (obj)
+  local m = nil
+  for _,category in pairs(catalogue) do
+    for _,entry in pairs(category.modules) do
+      if entry.name==obj.name then
+        m = entry.new(obj.x,obj.y,obj.id)
+      end
+    end
+  end
+  for n,e in ipairs(obj.inputs) do
+    m.inputs[n].value = e.value
+  end
+  for n,e in ipairs(obj.values) do
+    m.values[n].value = e.value
+    m.values[n].gate = e.gate
+  end
+  for n,e in ipairs(obj.params) do
+    m.params[n].value = e.value
+  end
+  return m
+end
+
+restore_connections = function (obj)
+  local c = nil
+  for i,_in in ipairs(obj.inputs) do
+    if _in.source then
+      local strength = _in.source.strength
+      local source_id = _in.source.source.module.id
+      local source_cell = _in.source.source.port_id
+      local target_id = obj.id
+      local target_cell = i
+      print("connection:", source_id, source_cell, "= "..strength.." =>", target_id, target_cell)
+      local con = restore_connection(source_id,source_cell,target_id,target_cell,strength)
+      MODULES[target_id]:add_connection(target_cell,con)
+    end
+  end
+  return c
+end
+
+zorns_module = function (_x,_y,_id,_n)
   return {
+    id = _id,
     name = _n,
     x = _x,
     y = _y,
@@ -11,7 +51,16 @@ zorns_module = function (_x,_y,_n)
     
     params = {indices={}},
     
+    -- UPDATE OUTPUTS
     ctrl_rate = function (self) end,
+    
+    -- UPDATE INPUTS
+    propagate_signals = function (self)
+      for _,i in ipairs(self.inputs) do
+        -- read: process conenctions and bias, deduce changes, etc. ...
+        IN.read(i)
+      end
+    end,
     
     add_input = function (self, n, s)
       table.insert(self.inputs,s)
@@ -30,32 +79,52 @@ zorns_module = function (_x,_y,_n)
       self.params.indices[p.name] = #self.params
     end,
     
+    add_connection = function (self, c, con)
+      local inlet = self.inputs[c]
+      inlet.source = con
+    end,
+    
+    inlet = function (self, n)
+      if type(n)=="string" then
+        return self.inputs[self.inputs.indices[n]]
+      elseif type(n)=="number" then
+        return self.inputs[n]
+      end
+    end,
+    
     param = function (self, n)
       local i = type(n)=="number" and n or self.params.indices[n]
       local param = self.params[i]
-      return param.value
+      if param.options --[[and param.value<=#param.options--]] and type(param.options[param.value])=="number" then
+        return param.options[param.value]
+      else
+        return param.value
+      end
+    end,
+    
+    outlet = function (self, n)
+      if type(n)=="string" then
+        return self.outputs[self.outputs.indices[n]]
+      elseif type(n)=="number" then
+        return self.outputs[n]
+      end
+    end,
+    
+    get_width = function (self)
+      return #self.inputs + #self.values + #self.outputs
     end,
     
     contains_connection = function (self, con)
-      local inlet = self:inlet(con.target.port)
-      if (inlet.source and inlet.source.source.module == con.source.module and inlet.source.source.port == con.source.port) then
+      local inlet = self:inlet(con.target.port_id)
+      if (inlet.source and inlet.source.source.module == con.source.module and inlet.source.source.port_id == con.source.port_id) then
         return inlet.source
       else
         return nil
       end
     end,
     
-    add_connection = function (self, c, con)
-      local inlet = self.inputs[c]
-      inlet.source = con
-    end,
-    
-    read = function (self, n)
-      return IN.read(self:inlet(n))
-    end,
-    
     write = function (self, n, v)
-      PORT.set_value(self:get_out(n),v)
+      self:outlet(n).signal = v
     end,
     
     in_area = function (self,x,y)
@@ -87,38 +156,6 @@ zorns_module = function (_x,_y,_n)
         return "value"
       else
         return "output"
-      end
-    end,
-    
-    --[[get_in = function (self, n)
-      if type(n)=="string" then
-        return self.inputs[self.inputs.indices[n] ]
-      elseif type(n)=="number" then
-        return self.inputs[n]
-      end
-    end,--]]
-    
-    inlet = function (self, n)
-      if type(n)=="string" then
-        return self.inputs[self.inputs.indices[n]]
-      elseif type(n)=="number" then
-        return self.inputs[n]
-      end
-    end,
-    
-    get_out = function (self, n)
-      if type(n)=="string" then
-        return self.outputs[self.outputs.indices[n]]
-      elseif type(n)=="number" then
-        return self.outputs[n]
-      end
-    end,
-    
-    outlet = function (self, n)
-      if type(n)=="string" then
-        return self.outputs[self.outputs.indices[n]]
-      elseif type(n)=="number" then
-        return self.outputs[n]
       end
     end,
     
@@ -166,8 +203,7 @@ zorns_module = function (_x,_y,_n)
     show = function (self, g)
       -- show inputs
       for i=1, #self.inputs do
-        --local l = Signal.map(self:inlet(i):get(),3,15,1)
-        local l = Signal.map(self:read(i).signal,3,15,1)
+        local l = Signal.map(self:inlet(i).signal,3,15,1)
         g:led(self.x+i-1,self.y,l)
       end
       
@@ -176,7 +212,7 @@ zorns_module = function (_x,_y,_n)
       
       -- show outputs
       for i=1, #self.outputs do
-        local l = Signal.map(PORT.get_value(self:get_out(i)),3,15,1)
+        local l = Signal.map(self:outlet(i).signal,3,15,1)
         g:led(self.x+#self.values+#self.inputs+i-1,self.y,l)
       end
     end
