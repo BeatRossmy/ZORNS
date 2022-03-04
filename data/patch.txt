@@ -1,0 +1,199 @@
+return {
+-- Table: {1}
+{
+   {2},
+   [3]={3},
+},
+-- Table: {2}
+{
+   ["phase"]=58.475765620954,
+   ["params"]={4},
+   ["x"]=7,
+   ["lfo_functions"]={5},
+   ["y"]=4,
+   ["outputs"]={6},
+   ["values"]={7},
+   ["id"]=1,
+   ["inputs"]={8},
+   ["name"]="lfo",
+   ["main_param"]=0,
+},
+-- Table: {3}
+{
+   ["phase"]=35.547611749221,
+   ["params"]={9},
+   ["x"]=7,
+   ["lfo_functions"]={10},
+   ["y"]=7,
+   ["outputs"]={11},
+   ["values"]={12},
+   ["id"]=3,
+   ["inputs"]={13},
+   ["name"]="lfo",
+   ["main_param"]=0,
+},
+-- Table: {4}
+{
+   {14},
+   ["indices"]={15},
+},
+-- Table: {5}
+{
+},
+-- Table: {6}
+{
+   {16},
+   ["indices"]={17},
+   ["names"]={18},
+},
+-- Table: {7}
+{
+},
+-- Table: {8}
+{
+   {19},
+   {20},
+   ["indices"]={21},
+   ["names"]={22},
+},
+-- Table: {9}
+{
+   {23},
+   ["indices"]={24},
+},
+-- Table: {10}
+{
+},
+-- Table: {11}
+{
+   {25},
+   ["indices"]={26},
+   ["names"]={27},
+},
+-- Table: {12}
+{
+},
+-- Table: {13}
+{
+   {28},
+   {29},
+   ["indices"]={30},
+   ["names"]={31},
+},
+-- Table: {14}
+{
+   ["name"]="shape",
+   ["options"]={32},
+   ["value"]=1,
+},
+-- Table: {15}
+{
+   ["shape"]=1,
+},
+-- Table: {16}
+{
+   ["signal"]=0.96859664782055,
+},
+-- Table: {17}
+{
+   ["signal"]=1,
+},
+-- Table: {18}
+{
+   "signal",
+},
+-- Table: {19}
+{
+   ["signal"]=0.34244795055906,
+   ["value"]=0.25,
+   ["source"]={33},
+},
+-- Table: {20}
+{
+   ["signal"]=1,
+   ["value"]=1,
+},
+-- Table: {21}
+{
+   ["amp"]=2,
+   ["freq"]=1,
+},
+-- Table: {22}
+{
+   "freq",
+   "amp",
+},
+-- Table: {23}
+{
+   ["name"]="shape",
+   ["options"]={34},
+   ["value"]=1,
+},
+-- Table: {24}
+{
+   ["shape"]=1,
+},
+-- Table: {25}
+{
+   ["signal"]=0.081961619196762,
+},
+-- Table: {26}
+{
+   ["signal"]=1,
+},
+-- Table: {27}
+{
+   "signal",
+},
+-- Table: {28}
+{
+   ["signal"]=0.25,
+   ["value"]=0.25,
+},
+-- Table: {29}
+{
+   ["signal"]=1,
+   ["value"]=1,
+},
+-- Table: {30}
+{
+   ["amp"]=2,
+   ["freq"]=1,
+},
+-- Table: {31}
+{
+   "freq",
+   "amp",
+},
+-- Table: {32}
+{
+   "sine",
+   "tri",
+   "ramp",
+   "rect",
+},
+-- Table: {33}
+{
+   ["strength"]=1,
+   ["target"]={35},
+   ["source"]={36},
+},
+-- Table: {34}
+{
+   "sine",
+   "tri",
+   "ramp",
+   "rect",
+},
+-- Table: {35}
+{
+   ["port_id"]=1,
+   ["module"]={2},
+},
+-- Table: {36}
+{
+   ["module"]={3},
+   ["port_id"]=3,
+   ["port"]={25},
+},
+}
