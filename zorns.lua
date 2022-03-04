@@ -1,9 +1,13 @@
 engine.name = 'PolyPerc'
 
 er = require "lib.er"
-
 local UI = require "ui"
 musicutil = require "musicutil"
+tabutil = require "tabutil"
+
+include("lib/grid_ui")
+
+include("lib/redraw_subroutines")
 
 include("lib/helpers")
 
@@ -21,12 +25,25 @@ scale_names = {
 scales = {}
 for i,n in pairs(scale_names) do scales[i] = musicutil.generate_scale (0, n, 10) end
 
-local category_list = UI.ScrollingList.new (8, 8, 2, category_names)
-local module_list = UI.ScrollingList.new (40, 8, 2, module_names[category_list.index])
+category_list = UI.ScrollingList.new (38, 8, 2, category_names)
+module_list = UI.ScrollingList.new (70, 8, 2, module_names[category_list.index])
 
-local value_dial = UI.Dial.new(32-11, 32-11, 22, 0.25, 0, 1, 0.01, 0, {},'')
+value_dial = UI.Dial.new(32-11, 40-11, 22, 0.25, 0, 1, 0.01, 0, {},'')
 
-local module_param = 1
+dirty_screen = true
+
+module_param = 1
+
+connected_midi_devices = {}
+midi_device_names = {}
+for _,d in pairs(midi.devices) do
+  if d.port then
+    table.insert(connected_midi_devices,midi.connect(d.port))
+    midi_device_names[#connected_midi_devices] = d.name
+    --connected_midi_devices[d.port] = midi.connect(d.port)
+    --midi_device_names[d.port] = d.name
+  end
+end
 
 select_module = function (x,y)
   for _,m in pairs(MODULES) do
@@ -48,138 +65,76 @@ create_connection = function (a,b)
 end
 
 set_connection = function (con)
-  con.target.module:add_connection(con.target.port,con)
+  con.target.module:add_connection(con.target.port_id,con)
 end
 
-g = grid.connect()
-g.key = function(x,y,z)
-  
-  -- FIRST SELECTION
-  if not selection and z==1 then
-    selection = select_module(x,y)
-    module_param = 1
-    if selection then
-      selection.module:grid_event(x,y,z)
-    end
-  -- REMOVE SELECTION
-  elseif selection and x==selection.x and y==selection.y and z==0 then
-    if selection.type=="empty_cell" then
-      local c = category_list.index
-      local m = module_list.index
-      print(c,m)
-      if m>1 then
-        table.insert(MODULES,catalogue[c].modules[m-1].new(selection.x,selection.y))
-      end
-    end
-    selection = nil
-  -- SECOND SELECTION
-  elseif selection.module and z==1 then
-    local sec_sel = select_module(x,y)
-    if sec_sel then
-      print("create connection")
-      local con = create_connection(selection,sec_sel)
-      if con then
-        local old_con = con.target.module:contains_connection(con)
-        if old_con  then 
-          print("connection exists")
-          con = old_con
-          selection.type = "connection"
-          selection.module = old_con
-          selection.port = nil
-        else
-          print("set connection")
-          set_connection(con)
-        end
-      end
-    end
-  end
-  
-  if selection==nil and z==1 then
-    selection = SEL.new(x,y,nil,nil,"empty_cell")
-    option = 0
-  end
-  
-  if selection then print("sel",selection.x,selection.y,selection.type) end
+restore_connection = function (s_id,s_c,t_id,t_c,s)
+  local src = SEL.new(nil,nil,MODULES[s_id],s_c,"output")
+  local trgt = SEL.new(nil,nil,MODULES[t_id],t_c,"input")
+  local con = create_connection(src,trgt)
+  con.strength = s
+  return con
 end
-
-m_out = midi.connect(2)
 
 selection = nil
+
+MAX_ID=0
 MODULES = {}
 CTRL_RATE = 1/128 -- 1/128
 
 ctrl_loop = function ()
+  main_clock:update()
   for _,m in pairs(MODULES) do
-    -- split
-    m:ctrl_rate()
     -- 1. calculate output states
+    m:ctrl_rate()
     -- 2. propagate values to inputs
+    m:propagate_signals()
   end
-end
-
-draw_loop = function ()
-  g:all(0)
-  for _,m in pairs(MODULES) do m:show(g) end
-  g:refresh()
 end
 
 function redraw()
+  if not dirty_screen then return end
+  print("redraw")
   screen.clear()
   screen.level(15)
-    
   if SEL.is_module(selection) then
-    local port = SEL.get_port(selection)
-    local port_name = SEL.get_name(selection)
-    local path = selection.module.name .. ": ".. port_name .. (selection.type=="output" and " >" or "")
-    
-    -- MAIN PARAM
-    --local t = ""..selection.module:show_param()
-    --screen.move(16,32)
-    --screen.text(t)
-    
-    -- PARAMS
-    local params = selection.module.params
-    for i,p in ipairs(params) do
-      screen.level(module_param==i and 15 or 3)
-      screen.move(72,16*i)
-      screen.text(p.name..":")
-      screen.move(72+32,16*i)
-      screen.text(p.options[p.value])
-    end
-    
-    screen.level(15)
-    
-    -- SIGNAL
-    if port.value~=nil then
-      screen.move(32,8)
-      screen.text_center(path)
-      value_dial.x = 32-11
-      value_dial:set_value(port.value)
-      screen.stroke()
-      value_dial:redraw()
-    end
-    
+    redraw_module_settings(selection) -- < == ERROR
+    redraw_module_port(selection)
+  
   elseif SEL.is_connection(selection) then
-    screen.move(64,8)
-    screen.text_center("connection")
-    value_dial.x = 64-11
-    value_dial:set_value(selection.module.strength)
-    screen.stroke()
-    value_dial:redraw()
-    
+    redraw_connection(selection)
+  
   elseif SEL.is_empty(selection) then
     category_list:redraw ()
     module_list:redraw ()
-    
+  
   elseif not selection then
-    screen.move(32,32)
-    screen.text("hold empty cell")
+    redraw_no_selection()
   end
   
   screen.update()
+  dirty_screen = false
 end
 
 function init ()
+  
+  -- load patch if available
+  stored_patch = tabutil.load(_path.data.."/zorns/patch.txt")
+  if stored_patch then
+    -- RESTORE MODULES
+    for i,m in pairs(stored_patch) do
+      print("=>",i)
+      local mo = restore_module(m)
+      MODULES[mo.id] = mo
+      MAX_ID = mo.id
+    end
+    -- RESTORE CONNECTIONS
+    for i,m in pairs(stored_patch) do
+      print("=>",i)
+      restore_connections(m)
+    end
+  end
+  
   metro.init(ctrl_loop,CTRL_RATE):start()
   
   metro.init(draw_loop, 1/15):start()
@@ -195,6 +150,7 @@ function init ()
 end
 
 function key (n,z)
+  dirty_screen = true
   if n==1 and z==1 then
     print("delete button")
     local deleted = false
@@ -209,18 +165,33 @@ function key (n,z)
     end
     if not deleted and SEL.is_module(selection) then
       -- DELETE MODULE
-      for i,m in pairs(MODULES) do
+      --[[for i,m in pairs(MODULES) do
         if m==selection.module then
           MODULES[i] = nil
           selection = nil
         end
-      end
+      end--]]
+      MODULES[selection.module.id] = nil
+      selection = nil
     end
+  
+  elseif n==2 and z==1 then
+    -- save MODULS
+    tabutil.save(MODULES, _path.data.."/zorns/patch.txt")
+  
+  elseif n==3 and z==1 then
+    -- clear MOCULES
+    for _,m in pairs(MODULES) do
+      m = nil
+    end
+    MODULES = {}
   end
+    
+  
 end
 
 function enc (n,d)
-  
+  dirty_screen = true
   if SEL.is_module(selection) then
     if n==1 then
       local port = SEL.get_port(selection)
@@ -237,7 +208,7 @@ function enc (n,d)
   elseif SEL.is_empty(selection) then
     if n==2 then
       category_list:set_index_delta(d,false)
-      module_list = UI.ScrollingList.new (40, 8, 1, module_names[category_list.index])
+      module_list = UI.ScrollingList.new (70, 8, 1, module_names[category_list.index])
     elseif n==3 then
       module_list:set_index_delta(d,false)
     end
