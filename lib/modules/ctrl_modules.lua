@@ -102,19 +102,13 @@ local ctrl_modules = {
     name = "sqncr",
     new = function (x,y,id)
       local m = zorns_module(x and x or 0, y and y or 0, id, "sqncr")
-      -- INPUTS
       m:add_input("gate",IN.new(0,false,GATE_STATES))
       m:add_input("reset",IN.new(0,false,GATE_STATES))
-      -- OUTPUTS
       m:add_output("cv",OUT.new())
       m:add_output("gate",OUT.new())
-      -- FIELDS
       m.value = {}
-      for i=1,8 do
-        m.value[i] = VALUE.new(0,false,NOTE_NAMES)
-      end
+      for i=1,8 do m.value[i] = VALUE.new(0,false,NOTE_NAMES) end
       m.step = 0
-      
       m.change_steps = function (self)
         local s = self:param("steps")
         if s<#self.value then
@@ -127,17 +121,13 @@ local ctrl_modules = {
           end
         end
       end
-      -- PARAMS
       m:add_param({name="ppq",value=3,options=main_clock.div_names})
       m:add_param({name="steps",value=8,options={1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16},action=m.change_steps})
-      -- CTRL
       m.ctrl_rate = function (self)
         local g = self:inlet("gate")
         local r = self:inlet("reset")
-        
         local ppq = g.source and 1 or self:param("ppq")
         local phase = g.source and g.phase or main_clock:get_phase(ppq)
-        
         if r.phase==1 then self.step = 0 end
         if phase==1 then
           local s = g.source and (self.step+1) or (main_clock:get(ppq))
@@ -146,11 +136,11 @@ local ctrl_modules = {
           local t = v.gate
           self:write("cv",v.value)
           self:write("gate",t and 1 or 0)
+          print(self.step,t,v.value)
         elseif phase==-1 then
           self:write("gate",0)
         end
       end
-      
       m.show_ui = function (self,g)
         for i,v in pairs(self.value) do
           local l = SIGNAL.map(v.value,3,10,1) + (v.gate and 5 or 0)

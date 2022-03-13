@@ -1,8 +1,8 @@
 local engine_modules = {
   {
-    name = "engine_out",
+    name = "engine/o",
     new = function (x,y,id)
-      local m = zorns_module(x and x or 0, y and y or 0, id, "engine_out")
+      local m = zorns_module(x and x or 0, y and y or 0, id, "engine/o")
       m:add_input("gate",IN.new(0,false,GATE_STATES))
       m:add_input("pitch",IN.new(0,nil,NOTE_NAMES))
       m:add_input("amp",IN.new(0.5))

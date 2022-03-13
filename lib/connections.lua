@@ -101,9 +101,19 @@ CON = {
   get_signal = function (con_id)
     local con = CONNECTIONS.list[con_id]
     if not con then return 0 end
-    --local src = MODULES.list[con.source.module_id]:get_port(con.source.port_id)
     local src = MODULES.list[con.source.module_id]:outlet(con.source.port_id)
     return src.signal * con.strength
+  end,
+  remove = function (con_id)
+    local con = CONNECTIONS.list[con_id]
+    -- remove from source
+    local src = MODULES.list[con.source.module_id]:outlet(con.source.port_id)
+    table.remove(src.targets,tabutil.key(src.targets,con_id))
+    -- remove from target
+    local trgt = MODULES.list[con.target.module_id]:inlet(con.target.port_id)
+    trgt.source = nil
+    -- remove from list
+    CONNECTIONS.list[con_id] = nil
   end
 }
 
@@ -141,9 +151,8 @@ IN = {
   read = function (_in)
     local s = IN.calc_signal(_in)
     
-    local change = s~=_in.signal
+    _in.change = s~=_in.signal
     _in.signal = s
-    _in.change = change
     
     if _in.gate~=nil then
       local g = (s>=0.5)
@@ -164,4 +173,35 @@ VALUE = {
 
 OUT = {
   new = function () return {signal= 0, targets={}} end
+}
+
+PARAM = {
+  new = function () return {} end,
+  change = function (m,p,d)
+    if p.options then
+      p.value = util.clamp(p.value+d,1,#p.options)
+    elseif p.min and p.max and p.delta then
+      p.value = util.clamp(p.value+d*p.delta,p.min,p.max)
+    end
+    if p.action then
+      p.action(m)
+    end
+  end,
+  set = function (m,p,v)
+    if p.options then
+      p.value = util.clamp(v,1,#p.options)
+    elseif p.min and p.max and p.delta then
+      p.value = util.clamp(v,p.min,p.max)
+    end
+    if p.action then
+      p.action(m)
+    end
+  end,
+  get = function (p)
+    if p.options and type(p.options[p.value])=="number" then
+      return p.options[p.value]
+    else
+      return p.value
+    end
+  end
 }
