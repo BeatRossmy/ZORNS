@@ -1,26 +1,50 @@
-Signal = {
-  map = function (s,l,h,q)
-    if type(s)=="table" then s = s.value end
-    local v = util.linlin(0,1,l,h,s)
-    if q then v = util.round(v,q) end
+SIGNAL = {
+  map = function (s,a,b,c)
+    if type(a)=="table" and #a>0 then
+      return SIGNAL.map_list(s,a)
+    elseif type(a)=="table" and a.min and a.max then
+      return SIGNAL.xmap(s,a.min,a.max,a.q)
+    elseif type(a)=="number" and type(b)=="number" then
+      return SIGNAL.xmap(s,a,b,c)
+    end
+    return s
+  end,
+  -- with upper number => [l,h]
+  map_range = function (s,l,h,q)
+    l = l and l or 0
+    h = h and h or 1
+    local v = l + s * (h-l)
+    if q and q>0 then
+      v = math.floor(v/q)*q
+    end
     return v
   end,
-  to_midi = function (s)
-    if type(s)=="table" then s = s.value end
-    local v = util.linlin(0,1,0,120,s)
-    return util.round(v,1)
+  -- without upper number => [l,h[
+  xmap = function (s,l,h,q)
+    s = s==1 and (s-0.0000001) or s
+    return SIGNAL.map_range(s,l,h,q)
+  end,
+  map_list = function (s,list)
+    local i = SIGNAL.xmap(s,1,#list+1,1)
+    return list[i]
   end
+  
 }
 
 SEL = {
-  new = function (_x,_y,_m,_p,_t)
-    return {x=_x, y=_y, module=_m, port=_p, type=_t}
+  new = function (_x,_y,_m_id,_p_id,_t)
+    return {x=_x, y=_y, module_id=_m_id, port_id=_p_id, type=_t}
   end,
   get_port = function (sel)
-    return sel.module:get_port(sel.port)
+    -- return MODULES.list[sel.module_id]:get_port(sel.port_id)
+    return MODULES.list[sel.module_id][sel.type][sel.port_id]
   end,
   get_name = function (sel)
-    return sel.module:get_port_name(sel.port)
+    -- return MODULES.list[sel.module_id]:get_port_name(sel.port_id)
+    return MODULES.list[sel.module_id]:get_port_name(sel)
+  end,
+  get_cell = function (sel)
+    return MODULES.list[sel.module_id]:id_to_cell(sel)
   end,
   is_empty = function (sel)
     return (sel and sel.type=="empty_cell")
@@ -34,28 +58,51 @@ SEL = {
   is_value = function (sel)
     return (sel and sel.type=="value")
   end,
-  is_ouput = function (sel)
+  is_output = function (sel)
     return (sel and sel.type=="output")
   end,
   is_connection = function (sel)
     return (sel and sel.type=="connection")
+  end,
+  not_this_module = function (sel, m)
+    return (sel and sel.module_id and sel.module_id~=m.id)
   end
 }
 
 CON = {
-  new = function (src,trgt,str)
+  new = function (a,b,str,_id)
+    --local a_type = MODULES.list[a.module_id]:get_type(a.port_id)
+    if (a.type=="value" or b.type=="value") then return nil end
+    local a_type = a.type
+    local src = a_type=="output" and a or b
+    local trgt = a_type=="input" and a or b
     return {
-      source = {module=src.module, port_id=src.port, port=src.module:get_port(src.port)},
-      target = {module=trgt.module, port_id=trgt.port},
-      strength = str
+      source = {module_id=src.module_id, port_id=src.port_id},
+      target = {module_id=trgt.module_id, port_id=trgt.port_id},
+      strength = str,
+      id = _id
     }
   end,
-  change_strength = function (con, d)
+  equals = function (a,b)
+    local bool = a.source.module_id==b.source.module_id and a.source.port_id==b.source.port_id
+    bool = bool and a.target.module_id==b.target.module_id and a.target.port_id==b.target.port_id
+    return bool
+  end,
+  contains = function (list, con)
+    for i,c in pairs(list) do
+      if CON.equals(c,con) then return i end
+    end
+    return nil
+  end,
+  change_strength = function (con_id, d)
+    local con = CONNECTIONS.list[con_id]
     con.strength = util.clamp(con.strength+d*0.01,0,1)
   end,
-  get_signal = function (con)
+  get_signal = function (con_id)
+    local con = CONNECTIONS.list[con_id]
     if not con then return 0 end
-    local src = con.source.port
+    --local src = MODULES.list[con.source.module_id]:get_port(con.source.port_id)
+    local src = MODULES.list[con.source.module_id]:outlet(con.source.port_id)
     return src.signal * con.strength
   end
 }
@@ -74,16 +121,21 @@ PORT = {
     if p.value~=nil then p.value = util.clamp(v,0,1) end
   end,
   change_value = function (p,d)
-    if p.value~=nil then p.value = util.clamp(p.value+d*0.01,0,1) end
+    if p.value~=nil then p.value = util.clamp(p.value+d*1/240,0,1) end
   end,
   toggle_gate = function (p)
     if p.gate~=nil then p.gate = not p.gate end
-  end
+  end,
+  --[[get_connections = function (p)
+    if p.source then return p.source
+    elseif p.targets then return p.targets end
+    return nil
+  end--]]
 }
 
 IN = {
-  new = function (v,g)
-    return {signal=v, value=v, gate=g, phase=(g~=nil and 0 or nil), source=nil}
+  new = function (v,g,m)
+    return {signal=v, value=v, gate=g, phase=(g~=nil and 0 or nil), source=nil, mapping=m, change=true}
   end,
   
   read = function (_in)
@@ -91,6 +143,7 @@ IN = {
     
     local change = s~=_in.signal
     _in.signal = s
+    _in.change = change
     
     if _in.gate~=nil then
       local g = (s>=0.5)
@@ -101,18 +154,14 @@ IN = {
     end
   end,
   calc_signal = function (_in)
-    return (_in.source and (_in.value + CON.get_signal(_in.source)) or _in.value)
+    return util.clamp((_in.source and (_in.value + CON.get_signal(_in.source)) or _in.value),0,1)
   end
 }
 
 VALUE = {
-  new = function (v,g)
-    return {value=v, gate=g}
-  end
+  new = function (v,g,m) return {value=v, gate=g, mapping=m} end
 }
 
 OUT = {
-  new = function () 
-    return {signal= 0}
-  end
+  new = function () return {signal= 0, targets={}} end
 }

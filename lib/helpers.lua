@@ -1,6 +1,5 @@
-conv = function (t,d)
-  --return (math.floor((t-1)*d)+1)
-  
+xor = function (a,b)
+  return (a or b) and (a~=b)
 end
 
 main_clock = {
@@ -14,7 +13,7 @@ main_clock = {
   
   update = function (self)
     self.last_pulse = self.pulse
-    self.pulse = clock.get_beats()
+    self.pulse = clock.get_beats() + 1/8
     for i,d in pairs(self.divisions) do
       local a,b = 0,0
       a = math.floor(self.pulse*2*d)%2
@@ -26,17 +25,6 @@ main_clock = {
         self.phases[i] = 0
       end
       
-      --a = math.floor((self.pulse*d)*2)%2
-      --b = math.floor((self.last_pulse*d)*2)%2
-      --[[if (a==0 and b==1) then
-        self.phases[i] = 1
-        self.pulses[i] = math.floor(self.pulse*d)
-      elseif (a==1 and b==0) then
-        self.phases[i] = -1
-      else
-        self.phases[i] = 0
-      end--]]
-      
     end
   end,
   
@@ -45,7 +33,6 @@ main_clock = {
   end,
   
   get = function (self, d)
-    --return math.floor(self.pulse*d)
     return self.pulses[d]
   end,
   
