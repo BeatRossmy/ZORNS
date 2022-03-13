@@ -9,38 +9,36 @@ g.key = function(x,y,z)
   if not selection and z==1 then
     selection = select_module(x,y)
     module_param = 1
-    if selection then selection.module:grid_event(x,y,z) end
+    if selection then
+      local m = MODULES.list[selection.module_id]
+      m:grid_event(x,y,z)
+    end
   -- REMOVE SELECTION
   elseif selection and x==selection.x and y==selection.y and z==0 then
     if selection.type=="empty_cell" then
       local c = category_list.index
       local m = module_list.index
-      print(c,m)
       if m>1 then
-        -- table.insert(MODULES,catalogue[c].modules[m-1].new(selection.x,selection.y))
-        MAX_ID = MAX_ID+1
-        MODULES[MAX_ID] = catalogue[c].modules[m-1].new(selection.x,selection.y,MAX_ID)
+        MODULES:push(catalogue[c].modules[m-1].new(selection.x,selection.y,nil))
       end
     end
     selection = nil
   -- SECOND SELECTION
-  elseif selection and selection.module and z==1 then
+  elseif selection and selection.module_id and z==1 then
     local sec_sel = select_module(x,y)
     if sec_sel then
-      print("create connection")
-      local con = create_connection(selection,sec_sel)
+      local con = CON.new(selection,sec_sel,1)
       if con then
-        local old_con = con.target.module:contains_connection(con)
-        if old_con  then 
-          print("connection exists")
-          con = old_con
-          selection.type = "connection"
-          selection.module = old_con
-          selection.port = nil
+        local index = CON.contains(CONNECTIONS.list,con)
+        if not index then
+          CONNECTIONS:push(con)
+          MODULES.list[con.target.module_id]:add_connection(con.id)
+          MODULES.list[con.source.module_id]:add_connection(con.id)
         else
-          print("set connection")
-          set_connection(con)
+          con = CONNECTIONS.list[index]
         end
+        selection = SEL.new(selection.x,selection.y,nil,nil,"connection")
+        selection.con_id = con.id
       end
     end
   end
@@ -50,7 +48,7 @@ g.key = function(x,y,z)
     option = 0
   end
   
-  if selection then print("sel",selection.x,selection.y,selection.type) end
+  --if selection then print("selection",selection.x,selection.y,selection.type,selection.port_id) end
 end
 
 g_buffer = {
@@ -76,6 +74,11 @@ g_buffer = {
 }
 
 draw_loop = function ()
-  for _,m in pairs(MODULES) do m:show(g_buffer) end
+  for _,m in pairs(MODULES.list) do m:show(g_buffer) end
+  -- highlight connection
+  if SEL.is_input(selection) or SEL.is_output(selection) then
+    MODULES.list[selection.module_id]:show_connection(selection, g_buffer)
+  end
+  -- update
   g_buffer:draw()
 end
