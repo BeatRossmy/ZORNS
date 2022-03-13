@@ -24,3 +24,21 @@ ID_LIST = {
     }
   end
 }
+
+NAMED_LIST = {
+  new = function ()
+    return {names={},indices={}}
+  end,
+  add = function (l,n,e)
+    table.insert(l,e)
+    l.indices[n] = #l
+    l.names[#l] = n
+  end,
+  get = function (l,n)
+    if type(n)=="string" then
+      return l[l.indices[n]]
+    elseif type(n)=="number" then
+      return l[n]
+    end
+  end
+}

@@ -29,15 +29,6 @@ CTRL_RATE = 1/128
 MODULES = ID_LIST.new()
 
 CONNECTIONS = ID_LIST.new()
-delete_connection = function (con_id)
-  local id = con_id
-  local con = CONNECTIONS.list[id]
-  local src = MODULES.list[con.source.module_id]
-  local trgt = MODULES.list[con.target.module_id]
-  src:remove_connection(id)
-  trgt:remove_connection(id)
-  CONNECTIONS:pop(con)
-end
 
 select_module = function (x,y)
   for _,m in pairs(MODULES.list) do
@@ -54,6 +45,7 @@ ctrl_loop = function ()
   main_clock:update()
   for _,m in pairs(MODULES.list) do
     m:ctrl_rate()
+    --m:propagate_signals()
   end
   for _,m in pairs(MODULES.list) do
     m:propagate_signals()
@@ -110,14 +102,14 @@ function key (n,z)
   if n==1 and z==1 then
     
     if SEL.is_connection(selection) then
-      delete_connection(selection.con_id)
+      CON.remove(selection.con_id)
       selection = nil
     elseif SEL.is_module(selection) then
       -- DELETE ALL CONNECTIONS
       local sel_id = selection.module_id
       for id,con in pairs(CONNECTIONS.list) do
         if con.source.module_id==sel_id or con.target.module_id==sel_id then
-          delete_connection(id)
+          CON.remove(selection.con_id)
         end
       end
       -- DELETE MODULE
